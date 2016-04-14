@@ -1,10 +1,15 @@
 package com.getfsc.retroserver;
 
-import com.getfsc.retroserver.request.ServerRequest;
+import com.getfsc.retroserver.http.ServerRequest;
+import com.getfsc.retroserver.http.ServerResponse;
 import okhttp3.Request;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.Response;
+
+import java.util.concurrent.Callable;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Created by IntelliJ IDEA.
@@ -14,17 +19,14 @@ import retrofit2.Response;
  */
 public class DirectCall<T> implements Call<T> {
 
-    private Codeblock<T> codeblock;
+    private Consumer<ServerRequest> func;
     private ServerRequest request;
     private boolean isExecuted=false;
 
-    @FunctionalInterface
-    public interface Codeblock<G> {
-        public Response<G> call(ServerRequest request);
-    }
 
-    public DirectCall(Codeblock<T> codeblock) {
-        this.codeblock = codeblock;
+
+    public DirectCall(Consumer<ServerRequest> func) {
+        this.func = func;
     }
 
     public ServerRequest getRequest() {
@@ -38,7 +40,8 @@ public class DirectCall<T> implements Call<T> {
     @Override
     public Response<T> execute()  {
         try {
-            return codeblock.call(request);
+            func.accept(request);
+            return null; // we don't need Retrofit Response
         } finally {
             isExecuted = true;
         }
@@ -64,7 +67,7 @@ public class DirectCall<T> implements Call<T> {
 
     @Override
     public Call<T> clone() {
-        return new DirectCall<>(codeblock);
+        return new DirectCall<>(func);
     }
 
     @Override

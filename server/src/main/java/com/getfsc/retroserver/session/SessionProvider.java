@@ -1,7 +1,7 @@
 package com.getfsc.retroserver.session;
 
-import com.getfsc.retroserver.request.ServerRequest;
-import com.getfsc.retroserver.request.Session;
+import com.getfsc.retroserver.http.ServerRequest;
+import com.getfsc.retroserver.http.Session;
 import io.netty.handler.codec.http.cookie.Cookie;
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
 

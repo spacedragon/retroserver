@@ -1,6 +1,6 @@
 package com.getfsc.retroserver.auth;
 
-import com.getfsc.retroserver.request.ServerRequest;
+import com.getfsc.retroserver.http.ServerRequest;
 
 import java.util.List;
 

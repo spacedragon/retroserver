@@ -2,8 +2,8 @@ package com.getfsc.retroserver.jwt;
 
 import com.getfsc.retroserver.aop.AopFactory;
 import com.getfsc.retroserver.aop.AopInterceptor;
-import com.getfsc.retroserver.request.ServerRequest;
-import com.getfsc.retroserver.request.Session;
+import com.getfsc.retroserver.http.ServerRequest;
+import com.getfsc.retroserver.http.Session;
 import com.getfsc.retroserver.session.SessionProvider;
 import com.getfsc.retroserver.util.H;
 import io.jsonwebtoken.*;
@@ -58,7 +58,7 @@ public class JwtAopFactory implements AopFactory {
 
         @Override
         public boolean beforeInvoke(ServerRequest req) {
-            req.setObject(JwtProvider.class,new JwtProvider(options,req));
+            req.setObject(JwtProvider.class, new JwtProvider(options, req));
             String header = req.header("authorization").getOrDefault(req.header("Authorization").get(String.class));
 
             if (!H.isEmpty(header) && header.startsWith(PREFIX)) {
@@ -101,13 +101,11 @@ public class JwtAopFactory implements AopFactory {
         }
 
         @Override
-        public Response.Builder afterInvoke(ServerRequest request, Response.Builder response) {
+        public void afterInvoke(ServerRequest request) {
             if (code > 0) {
-                return response.code(code).body(ResponseBody.create(MediaType.parse("text/plain"), message));
+                request.response().error(code, message);
             }
-            return response;
         }
-
 
 
     }

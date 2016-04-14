@@ -2,7 +2,7 @@ package com.getfsc.retroserver.auth;
 
 import com.getfsc.retroserver.aop.AopFactory;
 import com.getfsc.retroserver.aop.AopInterceptor;
-import com.getfsc.retroserver.request.ServerRequest;
+import com.getfsc.retroserver.http.ServerRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import okhttp3.MediaType;
 import okhttp3.Response;
@@ -55,11 +55,10 @@ class CheckAopFactory implements AopFactory {
             }
 
             @Override
-            public Response.Builder afterInvoke(ServerRequest request, Response.Builder response) {
+            public void afterInvoke(ServerRequest request) {
                 if (status != HttpResponseStatus.OK) {
-                    return response.code(status.code()).body(ResponseBody.create(MediaType.parse("text/plain"), message));
+                    request.response().code(status.code()).setBody(message);
                 }
-                return response;
             }
         };
     }

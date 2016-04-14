@@ -15,6 +15,8 @@
  */
 package com.getfsc.retroserver.server;
 
+import com.getfsc.retroserver.AsyncCall;
+import com.getfsc.retroserver.Callback;
 import com.getfsc.retroserver.DirectCall;
 import com.getfsc.retroserver.Route;
 import com.getfsc.retroserver.aop.AopFactory;
@@ -33,18 +35,14 @@ import io.netty.handler.codec.http.router.Router;
 import io.netty.util.CharsetUtil;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
-import okhttp3.Protocol;
-import okhttp3.Request;
 import retrofit2.Call;
-import retrofit2.Callback;
-import retrofit2.Response;
 
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static io.netty.handler.codec.http.HttpHeaderNames.*;
+import static io.netty.handler.codec.http.HttpHeaderNames.CONTENT_TYPE;
 import static io.netty.handler.codec.http.HttpResponseStatus.*;
-import static io.netty.handler.codec.http.HttpVersion.*;
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
 
 public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
 
@@ -124,8 +122,8 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                     sendNotFound(ctx);
                     reset();
                 } else {
-
-                    ServerRequestImpl req = new ServerRequestImpl(request, decoder, contentBuffer, routeResult);
+                    ServerRequestImpl req = new ServerRequestImpl(request, decoder,
+                            contentBuffer, routeResult, new DefaultHttpResponse(HTTP_1_1, OK));
                     try {
                         List<AopInterceptor> aops = route.getAopFactories().stream().map(AopFactory::create)
                                 .collect(Collectors.toList());
@@ -134,14 +132,11 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                             call = route.getCaller().call(req);
                         }
                         if (call == null) {
-                            okhttp3.Response.Builder respBuilder = new okhttp3.Response.Builder()
-                                    .protocol(Protocol.HTTP_1_1)
-                                    .request(new Request.Builder().url("http://localhost/").build());
-                            final okhttp3.Response finalResponse = aopResponse(aops,req, respBuilder);
-                            if (finalResponse.code() == -1) {
+                            aopResponse(aops,req);
+                            if (req.response().code() == -1) {
                                 sendNotFound(ctx);
                             } else {
-                                req.handleResponse(finalResponse, finalResponse.body(), ctx);
+                                req.handleResponse(ctx);
                                 reset();
                             }
                             aops.forEach(AopInterceptor::destory);
@@ -150,48 +145,43 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                             directCall.setRequest(req);
 
                             try {
-                                Response r = directCall.execute();
-                                okhttp3.Response.Builder respBuilder = r.raw().newBuilder();
-                                Object body=r.body();
-                                okhttp3.Response finalResponse = aopResponse(aops, req,respBuilder);
-                                req.handleResponse(finalResponse,body, ctx);
+
+                                req.handleResponse(ctx);
                             } finally {
                                 req.destroy();
                                 aops.forEach(AopInterceptor::destory);
                                 reset();
                             }
 
-                        } else {
-                            call.enqueue(new Callback() {
+                        } else if(call instanceof AsyncCall){
+                            ((AsyncCall)call).executeAsync(new Callback() {
+                                @Override
+                                public void done(Object o) {
+                                    try {
+                                        req.handleResponse(context);
+                                    } finally {
+                                        req.destroy();
+                                        aops.forEach(AopInterceptor::destory);
+                                    }
+                                }
+
+                                @Override
+                                public void failed(Exception e, Object message) {
+                                    try {
+                                        req.handleError(context, e, message);
+                                    } finally {
+                                        req.destroy();
+                                        aops.forEach(AopInterceptor::destory);
+                                    }
+                                }
+
                                 private final ChannelHandlerContext context = ctx;
 
-                                @Override
-                                public void onResponse(Call call, Response response) {
-                                    try {
-                                        okhttp3.Response.Builder respBuilder = response.raw().newBuilder();
-                                        okhttp3.Response finalResponse = aopResponse(aops,req, respBuilder);
-                                        req.handleResponse(finalResponse, response.body(), context);
-                                    } finally {
-                                        req.destroy();
-                                        aops.forEach(AopInterceptor::destory);
-                                    }
-                                }
-
-                                @Override
-                                public void onFailure(Call call, Throwable t) {
-                                    try {
-                                        req.handleError(context, t);
-                                    } finally {
-                                        req.destroy();
-                                        aops.forEach(AopInterceptor::destory);
-
-                                    }
-                                }
                             });
                             reset();
                         }
                     } catch (Exception e) {
-                        req.handleError(ctx, e);
+                        req.handleError(ctx, e, null);
                         reset();
                     }
                 }
@@ -199,11 +189,10 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
         }
     }
 
-    private okhttp3.Response aopResponse(List<AopInterceptor> aops, ServerRequestImpl req, okhttp3.Response.Builder resp) {
+    private void aopResponse(List<AopInterceptor> aops, ServerRequestImpl req) {
         for (AopInterceptor aop : aops) {
-            resp = aop.afterInvoke(req,resp);
+            aop.afterInvoke(req);
         }
-        return resp.build();
     }
 
     private void sendNotFound(ChannelHandlerContext ctx) {

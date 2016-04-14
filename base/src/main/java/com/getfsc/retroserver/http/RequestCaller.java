@@ -1,4 +1,4 @@
-package com.getfsc.retroserver.request;
+package com.getfsc.retroserver.http;
 
 import retrofit2.Call;
 

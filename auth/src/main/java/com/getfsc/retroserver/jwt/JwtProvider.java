@@ -1,6 +1,6 @@
 package com.getfsc.retroserver.jwt;
 
-import com.getfsc.retroserver.request.ServerRequest;
+import com.getfsc.retroserver.http.ServerRequest;
 import io.jsonwebtoken.JwtBuilder;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;

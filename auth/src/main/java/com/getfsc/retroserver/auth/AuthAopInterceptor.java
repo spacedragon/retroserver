@@ -1,7 +1,7 @@
 package com.getfsc.retroserver.auth;
 
 import com.getfsc.retroserver.aop.AopInterceptor;
-import com.getfsc.retroserver.request.ServerRequest;
+import com.getfsc.retroserver.http.ServerRequest;
 import okhttp3.Response;
 
 /**
@@ -23,10 +23,6 @@ class AuthAopInterceptor implements AopInterceptor {
         return true;
     }
 
-    @Override
-    public Response.Builder afterInvoke(ServerRequest request, Response.Builder response) {
-        return null;
-    }
 
     @Override
     public void destory() {

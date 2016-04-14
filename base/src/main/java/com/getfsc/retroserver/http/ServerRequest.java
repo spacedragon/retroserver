@@ -1,4 +1,4 @@
-package com.getfsc.retroserver.request;
+package com.getfsc.retroserver.http;
 
 import okhttp3.RequestBody;
 
@@ -40,4 +40,6 @@ public interface ServerRequest {
     };
 
     Session session();
+
+    <T> ServerResponse<T> response();
 }

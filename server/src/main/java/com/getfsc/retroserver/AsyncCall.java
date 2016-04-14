@@ -1,12 +1,12 @@
 package com.getfsc.retroserver;
 
-import com.getfsc.retroserver.request.ServerRequest;
+import com.getfsc.retroserver.http.ServerRequest;
 import okhttp3.Request;
 import retrofit2.Call;
-import retrofit2.Callback;
 import retrofit2.Response;
 
 import java.io.IOException;
+import java.util.function.BiConsumer;
 
 /**
  * Created by IntelliJ IDEA.
@@ -16,17 +16,18 @@ import java.io.IOException;
  */
 public class AsyncCall<T> implements Call<T> {
 
-    private Codeblock<T> codeblock;
+    private BiConsumer<ServerRequest, Callback<T>> func;
 
-    @FunctionalInterface
-    public interface Codeblock<G> {
-        void run(ServerRequest request, Callback<G> callback);
+
+    public AsyncCall(BiConsumer<ServerRequest, Callback<T>> func) {
+        this.func = func;
     }
 
 
-    public AsyncCall(Codeblock<T> codeblock) {
-        this.codeblock = codeblock;
+    public void executeAsync(Callback<T> callback) {
+        func.accept(request, callback);
     }
+
 
     @Override
     public Response<T> execute() throws IOException {
@@ -34,9 +35,10 @@ public class AsyncCall<T> implements Call<T> {
     }
 
     @Override
-    public void enqueue(Callback<T> callback) {
-        codeblock.run(request,callback);
+    public void enqueue(retrofit2.Callback<T> callback) {
+        throw new RuntimeException("should not be here");
     }
+
 
     @Override
     public boolean isExecuted() {
@@ -45,7 +47,6 @@ public class AsyncCall<T> implements Call<T> {
 
     @Override
     public void cancel() {
-
     }
 
     @Override
@@ -55,7 +56,7 @@ public class AsyncCall<T> implements Call<T> {
 
     @Override
     public Call<T> clone() {
-        return new AsyncCall<>(codeblock);
+        return new AsyncCall<>(func);
     }
 
     ServerRequest request;

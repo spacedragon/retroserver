@@ -2,12 +2,12 @@ package com.getfsc.retroserver.server;
 
 import com.getfsc.retroserver.ObjectConvert;
 import com.getfsc.retroserver.Route;
-import com.getfsc.retroserver.request.ServerRequest;
-import com.getfsc.retroserver.request.Session;
-import com.getfsc.retroserver.request.Value;
+import com.getfsc.retroserver.http.ServerRequest;
+import com.getfsc.retroserver.http.ServerResponse;
+import com.getfsc.retroserver.http.Session;
+import com.getfsc.retroserver.http.Value;
 import com.getfsc.retroserver.session.SessionProvider;
 import com.getfsc.retroserver.util.H;
-import com.google.common.collect.ImmutableMap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
@@ -20,7 +20,6 @@ import io.netty.handler.codec.http.multipart.*;
 import io.netty.handler.codec.http.router.RouteResult;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.stream.ChunkedFile;
-import io.netty.util.AttributeKey;
 import io.netty.util.AttributeMap;
 import io.netty.util.CharsetUtil;
 import io.netty.util.DefaultAttributeMap;
@@ -57,10 +56,11 @@ public class ServerRequestImpl implements ServerRequest {
 
     private final HttpRequest request;
     private final HttpPostRequestDecoder decoder;
+    private final ServerResponseImpl response;
     private CompositeByteBuf bodyBuf;
     private final RouteResult<Route> routeResult;
 
-    public ServerRequestImpl(HttpRequest request, HttpPostRequestDecoder decoder, CompositeByteBuf bodyBuf, RouteResult<Route> routeResult) {
+    public ServerRequestImpl(HttpRequest request, HttpPostRequestDecoder decoder, CompositeByteBuf bodyBuf, RouteResult<Route> routeResult, DefaultHttpResponse rawResponse) {
 
         this.request = request;
         this.decoder = decoder;
@@ -68,6 +68,7 @@ public class ServerRequestImpl implements ServerRequest {
         this.routeResult = routeResult;
         if (bodyBuf != null)
             bodyBuf.retain();
+        this.response = new ServerResponseImpl(rawResponse);
     }
 
     private HashMap<String, HttpData> formData = new HashMap<>();
@@ -170,6 +171,11 @@ public class ServerRequestImpl implements ServerRequest {
     }
 
     @Override
+    public <T> ServerResponse<T> response() {
+        return response;
+    }
+
+    @Override
     public Value header(String key) {
         return () -> request.headers().get(key);
     }
@@ -183,69 +189,56 @@ public class ServerRequestImpl implements ServerRequest {
         }
     }
 
-    public void handleResponse(Response r, Object body, ChannelHandlerContext ctx) {
+    public void handleResponse(ChannelHandlerContext ctx) {
         // Build the response object.
         try {
-            Headers.Builder headerBuilder = r.headers().newBuilder();
-            routeResult.target().getHeaders().forEach(headerBuilder::add);
-            Headers headers = headerBuilder.build();
-            String contentType = headers.get(HttpHeaderNames.CONTENT_TYPE.toString());
+
+            String contentType = response.header(HttpHeaderNames.CONTENT_TYPE.toString());
             MediaType mediaType = contentType == null ? null : MediaType.parse(contentType);
             String tt = mediaType == null ? "json" : mediaType.type();
             switch (tt) {
                 case "application":
                 case "json":
-                    handleJson(r.code(), headers, body, mediaType.charset(), ctx);
+                    handleJson(ctx);
                     break;
                 case "text":
-                    handleText(r.code(), headers, body, mediaType.charset(), ctx);
+                    handleText(mediaType.charset(), ctx);
                     break;
                 case "audio":
                 case "video":
                 case "image":
                 default:
-                    handleFile(r.code(), headers, body, ctx);
+                    handleFile(ctx);
             }
 
         } catch (Throwable e) {
-            handleError(ctx, e);
+            handleError(ctx, e, null);
         }
 
 
     }
 
-    private void handleText(int code, Headers headers, Object body, Charset charset, ChannelHandlerContext ctx) throws IOException {
-        if (body instanceof ResponseBody) {
-            ResponseBody responseBody = (ResponseBody) body;
-            writeResponse(code, headers, Unpooled.wrappedBuffer(responseBody.bytes()), ctx);
-        } else {
-            writeResponse(code, headers, Unpooled.wrappedBuffer(body.toString().getBytes(charset)), ctx);
-
-        }
+    private void handleText(Charset charset, ChannelHandlerContext ctx) throws IOException {
+        writeResponse(Unpooled.wrappedBuffer(response.body().toString().getBytes(charset)), ctx);
     }
 
-    private void handleJson(int code, Headers headers, Object body, Charset charset, ChannelHandlerContext ctx) throws IOException {
-
-        if (body instanceof ResponseBody) {
-            String message = ((ResponseBody) body).string();
-            body = ImmutableMap.of("code",code,"message",message);
-        }
-        byte[] json = ObjectConvert.toJson(body);
-        writeResponse(code, headers, Unpooled.wrappedBuffer(json), ctx);
+    private void handleJson(ChannelHandlerContext ctx) throws IOException {
+        byte[] json = ObjectConvert.toJson(response.body());
+        writeResponse(Unpooled.wrappedBuffer(json), ctx);
     }
 
-    private void handleFile(int code, Headers headers, Object body, ChannelHandlerContext ctx) throws Exception {
+    private void handleFile(ChannelHandlerContext ctx) throws Exception {
+        Object body = response.body();
         if (body instanceof File) {
             File file = (File) body;
-            writeFileResponse(code, headers, file, ctx);
-
+            writeFileResponse(file, ctx);
         } else if (body instanceof byte[]) {
             byte[] bytes = (byte[]) body;
-            writeResponse(code, headers, Unpooled.copiedBuffer(bytes), ctx);
+            writeResponse(Unpooled.copiedBuffer(bytes), ctx);
         } else if (body instanceof ByteBuf) {
-            writeResponse(code, headers, Unpooled.copiedBuffer((ByteBuf) body), ctx);
+            writeResponse(Unpooled.copiedBuffer((ByteBuf) body), ctx);
         } else if (body instanceof ByteBuffer) {
-            writeResponse(code, headers, Unpooled.copiedBuffer((ByteBuffer) body), ctx);
+            writeResponse(Unpooled.copiedBuffer((ByteBuffer) body), ctx);
         } else {
             throw H.rte("unknown file object type:" + body.getClass().getCanonicalName());
         }
@@ -286,7 +279,7 @@ public class ServerRequestImpl implements ServerRequest {
                 LAST_MODIFIED, dateFormatter.format(new Date(fileToCache.lastModified())));
     }
 
-    private void writeFileResponse(int code, Headers headers, File file, ChannelHandlerContext ctx) throws ParseException, IOException {
+    private void writeFileResponse(File file, ChannelHandlerContext ctx) throws ParseException, IOException {
         String ifModifiedSince = request.headers().getAsString(IF_MODIFIED_SINCE);
         if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
             SimpleDateFormat dateFormatter = new SimpleDateFormat(HTTP_DATE_FORMAT, Locale.US);
@@ -360,15 +353,12 @@ public class ServerRequestImpl implements ServerRequest {
 
     }
 
-    private void writeResponse(int code, Headers headers, ByteBuf buffer, ChannelHandlerContext ctx) {
-        FullHttpResponse response = new DefaultFullHttpResponse(
-                HTTP_1_1, HttpResponseStatus.valueOf(code), buffer);
+    private void writeResponse(ByteBuf buffer, ChannelHandlerContext ctx) {
 
         boolean keepAlive = HttpUtil.isKeepAlive(request);
-        HttpHeaders headersWriting = response.headers();
-        headers.toMultimap().forEach(headersWriting::add);
+        HttpHeaders headersWriting = response.rawResponse.headers();
         if (keepAlive) {
-            headersWriting.setInt(CONTENT_LENGTH, response.content().readableBytes());
+            headersWriting.setInt(CONTENT_LENGTH, buffer.readableBytes());
             headersWriting.set(CONNECTION, HttpHeaderValues.KEEP_ALIVE);
         }
 
@@ -383,18 +373,28 @@ public class ServerRequestImpl implements ServerRequest {
                 }
             }
         }
-        ctx.write(response);
 
+        ctx.write(response.rawResponse);
+        ctx.write(buffer);
+        ctx.writeAndFlush(LastHttpContent.EMPTY_LAST_CONTENT);
         if (!keepAlive) {
             // If keep-alive is off, close the connection once the content is fully written.
             ctx.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE);
         }
     }
 
-    public void handleError(ChannelHandlerContext ctx, Throwable e) {
+    public void handleError(ChannelHandlerContext ctx, Throwable e, Object message) {
         log.error(e);
+        String errMessage;
+        if (message == null) {
+            errMessage = "Failure: " + e.getMessage() + "\r\n";
+        } else if (message instanceof String) {
+            errMessage = (String) message;
+        } else {
+            errMessage = new String(ObjectConvert.toJson(message), CharsetUtil.UTF_8);
+        }
         FullHttpResponse response = new DefaultFullHttpResponse(
-                HTTP_1_1, INTERNAL_SERVER_ERROR, Unpooled.copiedBuffer("Failure: " + e.getMessage() + "\r\n", CharsetUtil.UTF_8));
+                HTTP_1_1, INTERNAL_SERVER_ERROR, Unpooled.copiedBuffer(errMessage, CharsetUtil.UTF_8));
         response.headers().set(CONTENT_TYPE, "text/plain; charset=UTF-8");
 
         // Close the connection as soon as the error message is sent.

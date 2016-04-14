@@ -2,7 +2,7 @@ package com.getfsc.retroserver;
 
 import com.getfsc.retroserver.aop.AopFactory;
 import com.getfsc.retroserver.aop.AopFactoryHub;
-import com.getfsc.retroserver.request.RequestCaller;
+import com.getfsc.retroserver.http.RequestCaller;
 
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -1,6 +1,6 @@
 package example;
 
-import com.getfsc.retroserver.RetrofiController;
+import com.getfsc.retroserver.RetroController;
 import com.getfsc.retroserver.annotation.ContentType;
 import com.getfsc.retroserver.annotation.Controller;
 import com.getfsc.retroserver.auth.Check;
@@ -20,7 +20,7 @@ import java.util.List;
  * Time: 下午12:01
  */
 @Controller("/")
-public class TestServiceImpl extends RetrofiController implements TestService {
+public class TestServiceImpl extends RetroController implements TestService {
 
 
     public TestServiceImpl() {

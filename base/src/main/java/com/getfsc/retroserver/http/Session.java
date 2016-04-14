@@ -1,4 +1,4 @@
-package com.getfsc.retroserver.request;
+package com.getfsc.retroserver.http;
 
 /**
  * Created by IntelliJ IDEA.

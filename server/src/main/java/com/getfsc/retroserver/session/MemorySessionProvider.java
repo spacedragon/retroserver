@@ -1,6 +1,6 @@
 package com.getfsc.retroserver.session;
 
-import com.getfsc.retroserver.request.Session;
+import com.getfsc.retroserver.http.Session;
 
 import java.util.HashMap;
 import java.util.UUID;

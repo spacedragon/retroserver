@@ -1,7 +1,7 @@
 package com.getfsc.retroserver.aop;
 
 
-import com.getfsc.retroserver.request.ServerRequest;
+import com.getfsc.retroserver.http.ServerRequest;
 import okhttp3.Response;
 
 /**
@@ -18,8 +18,7 @@ public interface AopInterceptor {
      */
     boolean beforeInvoke(ServerRequest request);
 
-    default Response.Builder afterInvoke(ServerRequest request, Response.Builder response) {
-        return response;
+    default void afterInvoke(ServerRequest request) {
     }
 
 
