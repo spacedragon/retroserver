@@ -20,4 +20,8 @@ public class H {
     public static <T> T ifNull(T t, Supplier<T> supplier) {
          return t == null ? supplier.get() : t;
     }
+
+    public static boolean isEmpty(String string) {
+        return string == null || string.isEmpty();
+    }
 }

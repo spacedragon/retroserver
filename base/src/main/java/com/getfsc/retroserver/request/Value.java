@@ -12,7 +12,16 @@ public interface Value {
 
     Object value();
 
-    default  <T> T get(Class<T> clazz){
+    default <T> T get(Class<T> clazz) {
         return ObjectConvert.convert(value(), clazz);
-    };
+    }
+
+
+    default <T> T getOrDefault(T defaultValue) {
+        if (value() == null) {
+            return defaultValue;
+        } else {
+            return get((Class<T>) defaultValue.getClass());
+        }
+    }
 }

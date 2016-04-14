@@ -3,8 +3,11 @@ package com.getfsc.retroserver.server;
 import com.getfsc.retroserver.ObjectConvert;
 import com.getfsc.retroserver.Route;
 import com.getfsc.retroserver.request.ServerRequest;
+import com.getfsc.retroserver.request.Session;
 import com.getfsc.retroserver.request.Value;
+import com.getfsc.retroserver.session.SessionProvider;
 import com.getfsc.retroserver.util.H;
+import com.google.common.collect.ImmutableMap;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
@@ -17,13 +20,13 @@ import io.netty.handler.codec.http.multipart.*;
 import io.netty.handler.codec.http.router.RouteResult;
 import io.netty.handler.ssl.SslHandler;
 import io.netty.handler.stream.ChunkedFile;
+import io.netty.util.AttributeKey;
+import io.netty.util.AttributeMap;
 import io.netty.util.CharsetUtil;
+import io.netty.util.DefaultAttributeMap;
 import io.netty.util.internal.logging.InternalLogger;
 import io.netty.util.internal.logging.InternalLoggerFactory;
-import okhttp3.Headers;
-import okhttp3.MediaType;
-import okhttp3.RequestBody;
-import retrofit2.Response;
+import okhttp3.*;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -67,7 +70,9 @@ public class ServerRequestImpl implements ServerRequest {
             bodyBuf.retain();
     }
 
-    private HashMap<String, HttpData> data = new HashMap<>();
+    private HashMap<String, HttpData> formData = new HashMap<>();
+
+    private AttributeMap attributeMap = new DefaultAttributeMap();
 
     private Map<String, io.netty.handler.codec.http.multipart.HttpData> form() {
         while (decoder.hasNext()) {
@@ -75,13 +80,13 @@ public class ServerRequestImpl implements ServerRequest {
             switch (httpData.getHttpDataType()) {
                 case Attribute:
                     Attribute attribute = (Attribute) httpData;
-                    data.put(httpData.getName(), attribute);
+                    formData.put(httpData.getName(), attribute);
                     break;
                 case FileUpload:
-                    data.put(httpData.getName(), (FileUpload) httpData);
+                    formData.put(httpData.getName(), (FileUpload) httpData);
             }
         }
-        return data;
+        return formData;
     }
 
     @Override
@@ -137,6 +142,33 @@ public class ServerRequestImpl implements ServerRequest {
                 .collect(Collectors.toMap(Function.identity(), routeResult::queryParam));
     }
 
+
+    private HashMap data = new HashMap();
+
+    @Override
+    public void setObject(Object key, Object value) {
+        data.put(key, value);
+    }
+
+    public Object getObject(Object key) {
+        return data.get(key);
+    }
+
+
+    public <T> T get(Object key) {
+        return (T) data.get(key);
+    }
+
+    @Override
+    public Session session() {
+        SessionProvider sessionProvider = (SessionProvider) data.get(SessionProvider.class);
+        if (sessionProvider == null) {
+            throw H.rte("No session provider found!");
+        } else {
+            return sessionProvider.getSession(this);
+        }
+    }
+
     @Override
     public Value header(String key) {
         return () -> request.headers().get(key);
@@ -151,11 +183,9 @@ public class ServerRequestImpl implements ServerRequest {
         }
     }
 
-    public void handleResponse(Response r, ChannelHandlerContext ctx) {
+    public void handleResponse(Response r, Object body, ChannelHandlerContext ctx) {
         // Build the response object.
-
         try {
-
             Headers.Builder headerBuilder = r.headers().newBuilder();
             routeResult.target().getHeaders().forEach(headerBuilder::add);
             Headers headers = headerBuilder.build();
@@ -165,16 +195,16 @@ public class ServerRequestImpl implements ServerRequest {
             switch (tt) {
                 case "application":
                 case "json":
-                    handleJson(r.code(), headers, r.body(), ctx);
+                    handleJson(r.code(), headers, body, mediaType.charset(), ctx);
                     break;
                 case "text":
-                    handleText(r.code(), headers, r.body().toString(), mediaType.charset(), ctx);
+                    handleText(r.code(), headers, body, mediaType.charset(), ctx);
                     break;
                 case "audio":
                 case "video":
                 case "image":
                 default:
-                    handleFile(r.code(), headers, r.body(), ctx);
+                    handleFile(r.code(), headers, body, ctx);
             }
 
         } catch (Throwable e) {
@@ -184,11 +214,22 @@ public class ServerRequestImpl implements ServerRequest {
 
     }
 
-    private void handleText(int code, Headers headers, String body, Charset charset, ChannelHandlerContext ctx) {
-        writeResponse(code, headers, Unpooled.wrappedBuffer(body.getBytes(charset)), ctx);
+    private void handleText(int code, Headers headers, Object body, Charset charset, ChannelHandlerContext ctx) throws IOException {
+        if (body instanceof ResponseBody) {
+            ResponseBody responseBody = (ResponseBody) body;
+            writeResponse(code, headers, Unpooled.wrappedBuffer(responseBody.bytes()), ctx);
+        } else {
+            writeResponse(code, headers, Unpooled.wrappedBuffer(body.toString().getBytes(charset)), ctx);
+
+        }
     }
 
-    private void handleJson(int code, Headers headers, Object body, ChannelHandlerContext ctx) {
+    private void handleJson(int code, Headers headers, Object body, Charset charset, ChannelHandlerContext ctx) throws IOException {
+
+        if (body instanceof ResponseBody) {
+            String message = ((ResponseBody) body).string();
+            body = ImmutableMap.of("code",code,"message",message);
+        }
         byte[] json = ObjectConvert.toJson(body);
         writeResponse(code, headers, Unpooled.wrappedBuffer(json), ctx);
     }

@@ -1,6 +1,7 @@
 package com.getfsc.retroserver.server;
 
 import com.getfsc.retroserver.Route;
+import com.getfsc.retroserver.aop.AopFactoryHub;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.Channel;
@@ -32,23 +33,22 @@ public class NettyServer {
     private static final InternalLogger log = InternalLoggerFactory.getInstance(NettyServer.class);
 
     @Inject
-    public NettyServer(ServerOptions options,Set<Route> routes) {
+    public NettyServer(ServerOptions options, Set<Route> routes, AopFactoryHub hub) {
         this.options = options;
         this.routes = routes;
+        this.hub = hub;
     }
 
-    Set<Route> routes;
+
+
+    private Set<Route> routes;
+    private AopFactoryHub hub;
 
     public void start() {
         try {
             Router<Route> router = new Router<>();
 
-            for (Route route : routes) {
-                String path = route.getBaseUrl() + "/" + route.getUrl().replaceAll("\\{(.*)\\}", ":$1");
-                log.debug("mounting route path {}",path);
-                router.addRoute(HttpMethod.valueOf(route.getVerb()), path, route);
-            }
-            router.notFound(Route.NotFound);
+            installRoutes(router);
 
             final SslContext sslCtx;
             if (options.ssl()) {
@@ -78,6 +78,16 @@ public class NettyServer {
         } catch (Exception e) {
             log.error(e);
         }
+    }
+
+    private void installRoutes(Router<Route> router) {
+        for (Route route : routes) {
+            String path = route.getBaseUrl() + "/" + route.getUrl().replaceAll("\\{(.*)\\}", ":$1");
+            log.debug("mounting route path {}",path);
+            route.installAops(hub);
+            router.addRoute(HttpMethod.valueOf(route.getVerb()), path, route);
+        }
+        router.notFound(Route.NotFound);
     }
 
 

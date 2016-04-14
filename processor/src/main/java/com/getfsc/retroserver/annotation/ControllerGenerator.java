@@ -2,6 +2,7 @@ package com.getfsc.retroserver.annotation;
 
 import com.getfsc.retroserver.BodyType;
 import com.getfsc.retroserver.Route;
+import com.getfsc.retroserver.aop.AopFactoryHub;
 import com.getfsc.retroserver.request.RequestCaller;
 import com.getfsc.retroserver.request.ServerRequest;
 import com.getfsc.retroserver.util.StringUtil;
@@ -19,13 +20,11 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
-import javax.lang.model.util.Elements;
 import javax.tools.JavaFileObject;
 import java.io.IOException;
 import java.io.Writer;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -51,6 +50,13 @@ public class ControllerGenerator {
                 .addModifiers(Modifier.PUBLIC)
                 .addAnnotation(Module.class);
 
+//        MethodSpec methodSpec = MethodSpec.methodBuilder("providesHub")
+//                .returns(AopFactoryHub.class)
+//                .addAnnotation(Singleton.class)
+//                .addAnnotation(Provides.class)
+//                .addStatement("return new $T()",AopFactoryHub.class)
+//                .build();
+//        classBuilder.addMethod(methodSpec);
     }
 
     public void build(ProcessingEnvironment processingEnv) throws IOException {
@@ -105,20 +111,38 @@ public class ControllerGenerator {
                                 if (processingEnv.getElementUtils().overrides(method, ed.element, e)) {
 
 
-                                    MethodSpec.Builder builder = MethodSpec.methodBuilder(method.getSimpleName().toString() + "Route")
+                                    MethodSpec.Builder beforeRoute = MethodSpec.methodBuilder(method.getSimpleName().toString() + "Route")
                                             .addParameter(TypeName.get(e.asType()), "controller")
                                             .returns(Route.class)
                                             .addAnnotation(AnnotationSpec.builder(Provides.class)
                                                     .addMember("type", "Provides.Type.SET")
                                                     .build())
-                                            .addStatement("$T route = new $T()",Route.class,Route.class);
-                                    handleServerAnnotation(method, builder);
-                                    MethodSpec methodSpec = builder
-                                            .addStatement("route.setVerb($S)",ed.verb)
-                                            .addStatement("route.setBaseUrl($S)",baseUrl)
-                                            .addStatement("route.setUrl($S)",ed.url)
-                                            .addStatement("route.setBodyType($T.$L)",BodyType.class,ed.bodyType)
-                                            .addStatement("route.setCaller($L)",getCaller(method))
+                                            .addStatement("$T route = new $T()", Route.class, Route.class);
+
+                                    MethodSpec.Builder call = MethodSpec.methodBuilder("call")
+                                            .addAnnotation(Override.class)
+                                            .addModifiers(Modifier.PUBLIC)
+                                            .addParameter(ServerRequest.class, "request")
+                                            .returns(TypeName.get(method.getReturnType()));
+                                    handleServerAnnotation(method, beforeRoute,call);
+
+
+                                    String vars = method.getParameters().stream().map(ve -> addParam(call, ve))
+                                            .collect(Collectors.joining());
+
+                                    call.addStatement("return controller.$L($L)", method.getSimpleName().toString(), vars);
+
+
+                                    TypeSpec.Builder caller = TypeSpec.anonymousClassBuilder("")
+                                            .addSuperinterface(RequestCaller.class)
+                                            .addMethod(call.build());
+
+                                    MethodSpec methodSpec = beforeRoute
+                                            .addStatement("route.setVerb($S)", ed.verb)
+                                            .addStatement("route.setBaseUrl($S)", baseUrl)
+                                            .addStatement("route.setUrl($S)", ed.url)
+                                            .addStatement("route.setBodyType($T.$L)", BodyType.class, ed.bodyType)
+                                            .addStatement("route.setCaller($L)", caller.build())
                                             .addStatement("return route")
                                             .build();
                                     classBuilder.addMethod(methodSpec);
@@ -128,41 +152,44 @@ public class ControllerGenerator {
         }
 
 
-
     }
 
-    private void handleServerAnnotation(ExecutableElement method, MethodSpec.Builder builder) {
+    private void handleServerAnnotation(ExecutableElement method, MethodSpec.Builder route, MethodSpec.Builder call) {
+
         ContentType contentType = method.getAnnotation(ContentType.class);
         if (contentType != null) {
-            builder.addStatement("route.addHeader($S)","content-type: "+contentType.value());
+            route.addStatement("route.addHeader($S)", "content-type: " + contentType.value());
         }
         ServerHeaders headers = method.getAnnotation(ServerHeaders.class);
         if (headers != null) {
             for (String header : headers.value()) {
-                builder.addStatement("route.addHeader($S)", header);
+                route.addStatement("route.addHeader($S)", header);
             }
         }
 
-    }
+        for (AnnotationMirror mirror : method.getAnnotationMirrors()) {
+            for (AnnotationMirror am : mirror.getAnnotationType().asElement().getAnnotationMirrors()) {
+                if (am.getAnnotationType().toString().equals(AnnoProcess.class.getName())) {
+                    for (Map.Entry<? extends ExecutableElement, ? extends AnnotationValue> entry : am.getElementValues().entrySet()) {
+                        if ("value".equals(entry.getKey().getSimpleName().toString())) {
+                            AnnotationValue obj = entry.getValue();
 
-    private TypeSpec getCaller(ExecutableElement method) {
-        MethodSpec.Builder call = MethodSpec.methodBuilder("call")
-                .addAnnotation(Override.class)
-                .addModifiers(Modifier.PUBLIC)
-                .addParameter(ServerRequest.class, "request")
-                .returns(TypeName.get(method.getReturnType()));
+                            try {
+                                Class processorClass = Class.forName(obj.getValue().toString());
+                                AnnoProcessor processor = (AnnoProcessor) processorClass.newInstance();
+                                Class annotationClass = Class.forName(mirror.getAnnotationType().toString());
+                                processor.process(processingEnv, method.getAnnotation(annotationClass), route,call);
+                            } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
+                                e.printStackTrace();
+                            }
+                            break;
+                        }
+                    }
 
-        String vars = method.getParameters().stream().map(ve -> addParam(call, ve))
-                .collect(Collectors.joining());
+                }
+            }
 
-        call.addStatement("return controller.$L($L)", method.getSimpleName().toString(), vars);
-
-
-        TypeSpec caller = TypeSpec.anonymousClassBuilder("")
-                .addSuperinterface(RequestCaller.class)
-                .addMethod(call.build())
-                .build();
-        return caller;
+        }
     }
 
     private String addParam(MethodSpec.Builder call, VariableElement ve) {
@@ -214,9 +241,9 @@ public class ControllerGenerator {
             return varname;
         }
 
-        //don't know how to set this value
-        call.addStatement("$T $L = null",
-                RequestBody.class, varname);
+        //don't know how to set this value, may be it's body
+        call.addStatement("$T $L= request.body($T)", varType, varname, varType);
+
         return varname;
     }
 
@@ -224,7 +251,7 @@ public class ControllerGenerator {
         ExecutableElement element;
         String verb;
         String url;
-        BodyType bodyType=BodyType.DEFAULT;
+        BodyType bodyType = BodyType.DEFAULT;
 
         public Endpoint(ExecutableElement element, String verb, String url) {
             this.element = element;
@@ -235,42 +262,42 @@ public class ControllerGenerator {
 
     private Endpoint getVerbAndUrl(ExecutableElement element) {
 
-        Endpoint endpoint=null;
+        Endpoint endpoint = null;
 
         GET get = element.getAnnotation(GET.class);
         if (get != null) {
-            endpoint =new Endpoint(element, "GET", get.value());
+            endpoint = new Endpoint(element, "GET", get.value());
         }
 
         HEAD head = element.getAnnotation(HEAD.class);
         if (head != null) {
-            endpoint =new Endpoint(element, "HEAD", head.value());
+            endpoint = new Endpoint(element, "HEAD", head.value());
         }
 
         POST post = element.getAnnotation(POST.class);
         if (post != null) {
-            endpoint =new Endpoint(element, "POST", post.value());
+            endpoint = new Endpoint(element, "POST", post.value());
         }
 
         PUT put = element.getAnnotation(PUT.class);
         if (put != null) {
-            endpoint =new Endpoint(element, "PUT", put.value());
+            endpoint = new Endpoint(element, "PUT", put.value());
         }
 
         DELETE delete = element.getAnnotation(DELETE.class);
         if (delete != null) {
-            endpoint =new Endpoint(element, "DELETE", delete.value());
+            endpoint = new Endpoint(element, "DELETE", delete.value());
         }
 
         PATCH patch = element.getAnnotation(PATCH.class);
         if (patch != null) {
-            endpoint =new Endpoint(element, "PATCH", patch.value());
+            endpoint = new Endpoint(element, "PATCH", patch.value());
         }
         if (endpoint != null) {
             FormUrlEncoded form = element.getAnnotation(FormUrlEncoded.class);
             if (form != null) {
                 endpoint.bodyType = BodyType.FORM_URL_ENCODED;
-            }else {
+            } else {
                 Multipart part = element.getAnnotation(Multipart.class);
                 endpoint.bodyType = BodyType.MULTIPART;
             }

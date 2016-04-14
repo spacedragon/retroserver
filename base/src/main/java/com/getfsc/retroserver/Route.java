@@ -1,9 +1,13 @@
 package com.getfsc.retroserver;
 
+import com.getfsc.retroserver.aop.AopFactory;
+import com.getfsc.retroserver.aop.AopFactoryHub;
 import com.getfsc.retroserver.request.RequestCaller;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by IntelliJ IDEA.
@@ -12,13 +16,14 @@ import java.util.List;
  * Time: 下午2:27
  */
 public class Route {
-    public static final Route NotFound=new Route();
-    private  String verb;
-    private  String url;
+    public static final Route NotFound = new Route();
+    private String verb;
+    private String url;
     private RequestCaller caller;
     private String baseUrl;
     private BodyType bodyType;
-    private List<String> headers=new ArrayList<>();
+    private List<String> headers = new ArrayList<>();
+
     public Route() {
     }
 
@@ -77,5 +82,25 @@ public class Route {
 
     public String getBaseUrl() {
         return baseUrl;
+    }
+
+    private List<AopFactory> aopFactories = new ArrayList<>();
+
+
+    HashMap<String,Object[]> aops =new HashMap<>();
+
+    public void addAop(String name,Object...params) {
+        aops.put(name, params);
+    }
+
+    public void installAops(AopFactoryHub hub) {
+        aopFactories.addAll(hub.globalFactories());
+        for (Map.Entry<String, Object[]> entry : aops.entrySet()) {
+            aopFactories.add(hub.newFactory(entry.getKey(), entry.getValue()));
+        }
+    }
+
+    public List<AopFactory> getAopFactories() {
+        return aopFactories;
     }
 }

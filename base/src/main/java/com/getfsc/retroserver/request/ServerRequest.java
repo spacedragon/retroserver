@@ -30,4 +30,14 @@ public interface ServerRequest {
     <T> T body(Class<T> clz);
 
     Map<String, String> queryMap();
+
+    void setObject(Object key, Object value);
+
+    Object getObject(Object key);
+
+    default <T> T get(Class<T> clz){
+        return (T) getObject(clz);
+    };
+
+    Session session();
 }
