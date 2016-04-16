@@ -15,12 +15,10 @@
  */
 package com.getfsc.retroserver.server;
 
-import com.getfsc.retroserver.AsyncCall;
-import com.getfsc.retroserver.Callback;
-import com.getfsc.retroserver.DirectCall;
-import com.getfsc.retroserver.Route;
+import com.getfsc.retroserver.*;
 import com.getfsc.retroserver.aop.AopFactory;
 import com.getfsc.retroserver.aop.AopInterceptor;
+import io.netty.buffer.ByteBuf;
 import io.netty.buffer.CompositeByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFutureListener;
@@ -58,8 +56,8 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
 
     private void reset() {
         routeResult = null;
-        if (contentBuffer != null)
-            contentBuffer.release();
+        /*if (contentBuffer != null)
+            contentBuffer.release();*/
         contentBuffer = null;
 
         decoder = null;
@@ -89,7 +87,9 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
 
             routeResult = router.route(request.method(), request.uri());
             if (request.method().equals(HttpMethod.POST) || request.method().equals(HttpMethod.PUT)) {
-                switch (routeResult.target().getBodyType()) {
+                BodyType bodyType = routeResult.target().getBodyType();
+                if (bodyType == null) bodyType = BodyType.DEFAULT;
+                switch (bodyType) {
                     case FORM_URL_ENCODED:
                     case MULTIPART:
                         decoder = new HttpPostRequestDecoder(factory, request);
@@ -111,7 +111,9 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                     return;
                 }
             } else if (contentBuffer != null) {
-                contentBuffer.addComponent(httpContent.content());
+                ByteBuf content = httpContent.content();
+                contentBuffer.addComponent(content);
+                contentBuffer.writerIndex(contentBuffer.writerIndex() + content.readableBytes());
             }
             // readHttpDataChunkByChunk();
 
@@ -132,7 +134,7 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                             call = route.getCaller().call(req);
                         }
                         if (call == null) {
-                            aopResponse(aops,req);
+                            aopResponse(aops, req);
                             if (req.response().code() == -1) {
                                 sendNotFound(ctx);
                             } else {
@@ -143,9 +145,8 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                         } else if (call instanceof DirectCall) {
                             DirectCall directCall = (DirectCall) call;
                             directCall.setRequest(req);
-
                             try {
-
+                                directCall.execute();
                                 req.handleResponse(ctx);
                             } finally {
                                 req.destroy();
@@ -153,8 +154,8 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                                 reset();
                             }
 
-                        } else if(call instanceof AsyncCall){
-                            ((AsyncCall)call).executeAsync(new Callback() {
+                        } else if (call instanceof AsyncCall) {
+                            ((AsyncCall) call).executeAsync(new Callback() {
                                 @Override
                                 public void done(Object o) {
                                     try {

@@ -4,9 +4,6 @@ import com.getfsc.retroserver.aop.AopFactory;
 import com.getfsc.retroserver.aop.AopInterceptor;
 import com.getfsc.retroserver.http.ServerRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
-import okhttp3.MediaType;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
 
 import java.util.List;
 
@@ -33,8 +30,7 @@ class CheckAopFactory implements AopFactory {
         return new AopInterceptor() {
             @Override
             public boolean beforeInvoke(ServerRequest request) {
-                RoleProvider roleProvider = new RoleProvider(request);
-                request.setObject(RoleProvider.class, roleProvider);
+
                 LoginProvider loginProvider = request.get(LoginProvider.class);
                 Object object = loginProvider.getUser();
                 if (object == null) {
@@ -42,7 +38,7 @@ class CheckAopFactory implements AopFactory {
                     message = "requires login.";
                     return false;
                 }
-                List<String> roles = roleProvider.userRoles(request);
+                List<String> roles = loginProvider.userRoles(request);
                 for (String checkRole : checkRoles) {
                     if (roles.contains(checkRole)) {
                         return true;

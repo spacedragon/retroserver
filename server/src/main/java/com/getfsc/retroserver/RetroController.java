@@ -20,13 +20,17 @@ public class RetroController {
         });
     }
 
+
+
     protected <T> Call<T> error(int code, T result) {
         return new DirectCall<>(request -> request.response()
                 .code(code)
                 .setBody(result));
     }
 
-
+    protected <T> Call<T> notfound(T result) {
+        return error(404, result);
+    }
     protected <T> Call<T> redirect(String url) {
         return new DirectCall<>(request -> request.response()
                 .redirect(url, null));

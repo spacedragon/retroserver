@@ -40,7 +40,6 @@ public class NettyServer {
     }
 
 
-
     private Set<Route> routes;
     private AopFactoryHub hub;
 
@@ -82,12 +81,24 @@ public class NettyServer {
 
     private void installRoutes(Router<Route> router) {
         for (Route route : routes) {
-            String path = route.getBaseUrl() + "/" + route.getUrl().replaceAll("\\{(.*)\\}", ":$1");
-            log.debug("mounting route path {}",path);
+            String path = join(route).replaceAll("\\{(.*?)\\}", ":$1");
+            log.debug("mounting route path: {} {}", route.getVerb(), path);
             route.installAops(hub);
             router.addRoute(HttpMethod.valueOf(route.getVerb()), path, route);
         }
         router.notFound(Route.NotFound);
+    }
+
+    private String join(Route route) {
+        String base = route.getBaseUrl();
+        if (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        String url = route.getUrl();
+        if (url.startsWith("/")) {
+            url = url.substring(1);
+        }
+        return base + "/" + url;
     }
 
 

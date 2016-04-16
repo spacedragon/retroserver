@@ -2,6 +2,7 @@ package com.getfsc.retroserver.server;
 
 import com.getfsc.retroserver.ObjectConvert;
 import com.getfsc.retroserver.Route;
+import com.getfsc.retroserver.annotation.ContentType;
 import com.getfsc.retroserver.http.ServerRequest;
 import com.getfsc.retroserver.http.ServerResponse;
 import com.getfsc.retroserver.http.Session;
@@ -76,16 +77,19 @@ public class ServerRequestImpl implements ServerRequest {
     private AttributeMap attributeMap = new DefaultAttributeMap();
 
     private Map<String, io.netty.handler.codec.http.multipart.HttpData> form() {
-        while (decoder.hasNext()) {
-            InterfaceHttpData httpData = decoder.next();
-            switch (httpData.getHttpDataType()) {
-                case Attribute:
-                    Attribute attribute = (Attribute) httpData;
-                    formData.put(httpData.getName(), attribute);
-                    break;
-                case FileUpload:
-                    formData.put(httpData.getName(), (FileUpload) httpData);
+        try {
+            while (decoder.hasNext()) {
+                InterfaceHttpData httpData = decoder.next();
+                switch (httpData.getHttpDataType()) {
+                    case Attribute:
+                        Attribute attribute = (Attribute) httpData;
+                        formData.put(httpData.getName(), attribute);
+                        break;
+                    case FileUpload:
+                        formData.put(httpData.getName(), (FileUpload) httpData);
+                }
             }
+        } catch (HttpPostRequestDecoder.EndOfDataDecoderException e) {
         }
         return formData;
     }
@@ -134,7 +138,7 @@ public class ServerRequestImpl implements ServerRequest {
 
     @Override
     public <T> T body(Class<T> clz) {
-        return ObjectConvert.convert(bodyBuf.toString(Charset.forName("utf8")), clz);
+        return ObjectConvert.fromJson(bodyBuf.toString(Charset.forName("utf8")), clz);
     }
 
     @Override
@@ -224,6 +228,7 @@ public class ServerRequestImpl implements ServerRequest {
 
     private void handleJson(ChannelHandlerContext ctx) throws IOException {
         byte[] json = ObjectConvert.toJson(response.body());
+        response.setHeader(CONTENT_TYPE.toString(), ContentType.JSON);
         writeResponse(Unpooled.wrappedBuffer(json), ctx);
     }
 
@@ -383,7 +388,7 @@ public class ServerRequestImpl implements ServerRequest {
         }
     }
 
-    public void handleError(ChannelHandlerContext ctx, Throwable e, Object message) {
+    void handleError(ChannelHandlerContext ctx, Throwable e, Object message) {
         log.error(e);
         String errMessage;
         if (message == null) {

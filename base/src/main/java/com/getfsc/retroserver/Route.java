@@ -21,7 +21,7 @@ public class Route {
     private String url;
     private RequestCaller caller;
     private String baseUrl;
-    private BodyType bodyType;
+    private BodyType bodyType = BodyType.DEFAULT;
     private List<String> headers = new ArrayList<>();
 
     public Route() {
@@ -87,9 +87,9 @@ public class Route {
     private List<AopFactory> aopFactories = new ArrayList<>();
 
 
-    HashMap<String,Object[]> aops =new HashMap<>();
+    HashMap<String, Object[]> aops = new HashMap<>();
 
-    public void addAop(String name,Object...params) {
+    public void addAop(String name, Object... params) {
         aops.put(name, params);
     }
 

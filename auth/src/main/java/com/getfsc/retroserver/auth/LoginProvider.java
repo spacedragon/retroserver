@@ -2,6 +2,10 @@ package com.getfsc.retroserver.auth;
 
 import com.getfsc.retroserver.http.ServerRequest;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 /**
  * Created by IntelliJ IDEA.
  * User: draco
@@ -9,6 +13,8 @@ import com.getfsc.retroserver.http.ServerRequest;
  * Time: 上午10:45
  */
 public class LoginProvider {
+
+    private static final String USER_ROLES = "userRoles";
 
 
     private static final String LOGIN_USER = "loginUser";
@@ -29,5 +35,14 @@ public class LoginProvider {
 
     public <T> T getUser() {
         return req.session().get(LOGIN_USER);
+    }
+
+    public List<String> userRoles(ServerRequest req) {
+        List<String> roles = req.session().get(USER_ROLES);
+        return roles == null ? Collections.emptyList() : roles;
+    }
+
+    public void setRoles(String... roles) {
+        req.session().set(USER_ROLES, Arrays.asList(roles));
     }
 }

@@ -13,5 +13,5 @@ import java.lang.annotation.*;
         ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Bootstrap {
-    String value() default "";
+    String[] value() default {".*"};
 }

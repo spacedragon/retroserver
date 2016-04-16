@@ -19,10 +19,14 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
+import javax.tools.FileObject;
 import javax.tools.JavaFileObject;
+import javax.tools.StandardLocation;
 import java.io.IOException;
 import java.io.Writer;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -36,43 +40,40 @@ import java.util.stream.Stream;
 public class ControllerGenerator {
 
     private String pkg;
-    private TypeElement bootsrapElem;
     private ProcessingEnvironment processingEnv;
 
-    TypeSpec.Builder classBuilder;
+    private List<String> controllerModules = new ArrayList<>();
 
-    public ControllerGenerator(String pkg, TypeElement bootsrapElem, ProcessingEnvironment processingEnv) {
+    public ControllerGenerator(String pkg, ProcessingEnvironment processingEnv) {
         this.pkg = pkg;
-        this.bootsrapElem = bootsrapElem;
         this.processingEnv = processingEnv;
-        classBuilder = TypeSpec.classBuilder("ControllerModule")
-                .addModifiers(Modifier.PUBLIC)
-                .addAnnotation(Module.class);
 
-//        MethodSpec methodSpec = MethodSpec.methodBuilder("providesHub")
-//                .returns(AopFactoryHub.class)
-//                .addAnnotation(Singleton.class)
-//                .addAnnotation(Provides.class)
-//                .addStatement("return new $T()",AopFactoryHub.class)
-//                .build();
-//        classBuilder.addMethod(methodSpec);
     }
 
-    public void build(ProcessingEnvironment processingEnv) throws IOException {
-        String fullName = pkg + ".ControllerModule";
-        if (processingEnv.getElementUtils().getTypeElement(fullName) != null) {
-            return;
-        }
 
-        JavaFile javaFile = JavaFile.builder(pkg, classBuilder.build())
+
+    public String build(TypeSpec clazz, String pkg, ProcessingEnvironment processingEnv) throws IOException {
+
+        String fullName = pkg + "." + clazz.name;
+        controllerModules.add(fullName);
+        if (processingEnv.getElementUtils().getTypeElement(fullName) != null) {
+            return fullName;
+        }
+        JavaFile javaFile = JavaFile.builder(pkg, clazz)
                 .build();
         JavaFileObject jfo = processingEnv.getFiler().createSourceFile(fullName);
         try (Writer writer = jfo.openWriter()) {
             javaFile.writeTo(writer);
         }
+        return fullName;
     }
 
-    public void addControllerElem(TypeElement controllerElem) {
+    public TypeSpec addControllerElem(TypeElement controllerElem) {
+        TypeSpec.Builder classBuilder = TypeSpec.classBuilder(controllerElem.getSimpleName().toString() + "Module")
+                .addModifiers(Modifier.PUBLIC)
+                .addAnnotation(Module.class);
+
+
         Controller anno = controllerElem.getAnnotation(Controller.class);
         String baseUrl = anno.value();
         boolean hasInject = ElementFilter.constructorsIn(controllerElem.getEnclosedElements())
@@ -123,11 +124,11 @@ public class ControllerGenerator {
                                             .addModifiers(Modifier.PUBLIC)
                                             .addParameter(ServerRequest.class, "request")
                                             .returns(TypeName.get(method.getReturnType()));
-                                    handleServerAnnotation(method, beforeRoute,call);
+                                    handleServerAnnotation(method, beforeRoute, call);
 
 
                                     String vars = method.getParameters().stream().map(ve -> addParam(call, ve))
-                                            .collect(Collectors.joining());
+                                            .collect(Collectors.joining(", "));
 
                                     call.addStatement("return controller.$L($L)", method.getSimpleName().toString(), vars);
 
@@ -150,7 +151,7 @@ public class ControllerGenerator {
             current = e.getSuperclass();
         }
 
-
+        return classBuilder.build();
     }
 
     private void handleServerAnnotation(ExecutableElement method, MethodSpec.Builder route, MethodSpec.Builder call) {
@@ -177,7 +178,7 @@ public class ControllerGenerator {
                                 Class processorClass = Class.forName(obj.getValue().toString());
                                 AnnoProcessor processor = (AnnoProcessor) processorClass.newInstance();
                                 Class annotationClass = Class.forName(mirror.getAnnotationType().toString());
-                                processor.process(processingEnv, method.getAnnotation(annotationClass), route,call);
+                                processor.process(processingEnv, method.getAnnotation(annotationClass), route, call);
                             } catch (InstantiationException | IllegalAccessException | ClassNotFoundException e) {
                                 e.printStackTrace();
                             }
@@ -229,7 +230,7 @@ public class ControllerGenerator {
 
         Body body = ve.getAnnotation(Body.class);
         if (body != null) {
-            call.addStatement("$T $L= request.body($T)", varType, varname, varType);
+            call.addStatement("$T $L= request.body($T.class)", varType, varname, varType);
             return varname;
         }
 
@@ -241,10 +242,12 @@ public class ControllerGenerator {
         }
 
         //don't know how to set this value, may be it's body
-        call.addStatement("$T $L= request.body($T)", varType, varname, varType);
+        call.addStatement("$T $L= request.body($T.class)", varType, varname, varType);
 
         return varname;
     }
+
+
 
     private static class Endpoint {
         ExecutableElement element;
@@ -298,7 +301,8 @@ public class ControllerGenerator {
                 endpoint.bodyType = BodyType.FORM_URL_ENCODED;
             } else {
                 Multipart part = element.getAnnotation(Multipart.class);
-                endpoint.bodyType = BodyType.MULTIPART;
+                if (part != null)
+                    endpoint.bodyType = BodyType.MULTIPART;
             }
         }
 

@@ -41,4 +41,9 @@ class UploadFileRequestBody extends RequestBody {
             }
             sink.writeAll(source);
     }
+
+    @Override
+    public String toString() {
+        return fileUpload.getFilename();
+    }
 }
