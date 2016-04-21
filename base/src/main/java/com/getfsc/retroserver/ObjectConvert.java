@@ -1,5 +1,6 @@
 package com.getfsc.retroserver;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.Base64Variants;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -28,6 +29,7 @@ public class ObjectConvert {
         objectMapper = new ObjectMapper();
         objectMapper.setBase64Variant(Base64Variants.MODIFIED_FOR_URL);
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        objectMapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
         objectMapper.registerModule(new AfterburnerModule());
     }
 

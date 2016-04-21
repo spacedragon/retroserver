@@ -1,5 +1,8 @@
 package com.getfsc.retroserver.http;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Created by IntelliJ IDEA.
  * User: draco
@@ -16,4 +19,8 @@ public interface Session {
     String id();
 
     void remove(String key);
+
+    void putAll(Map<String,Object> map);
+
+    boolean has(String key);
 }

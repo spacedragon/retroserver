@@ -67,8 +67,7 @@ public class ServerRequestImpl implements ServerRequest {
         this.decoder = decoder;
         this.bodyBuf = bodyBuf;
         this.routeResult = routeResult;
-        if (bodyBuf != null)
-            bodyBuf.retain();
+
         this.response = new ServerResponseImpl(rawResponse);
     }
 
@@ -103,7 +102,8 @@ public class ServerRequestImpl implements ServerRequest {
     public Value field(String key) {
         return () -> {
             try {
-                return form().get(key).getString();
+                HttpData httpData = form().get(key);
+                return httpData == null ? null : httpData.getString();
             } catch (IOException e) {
                 log.error(e);
                 throw new RuntimeException(e);

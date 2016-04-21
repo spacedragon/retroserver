@@ -7,12 +7,10 @@ import com.getfsc.retroserver.http.Session;
 import com.getfsc.retroserver.session.SessionProvider;
 import com.getfsc.retroserver.util.H;
 import io.jsonwebtoken.*;
-import okhttp3.MediaType;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
 
 import javax.inject.Inject;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Created by IntelliJ IDEA.
@@ -80,7 +78,7 @@ public class JwtAopFactory implements AopFactory {
                     message = "jwt is missiong";
                     return false;
                 }
-                HashMap map = new HashMap();
+                HashMap<String,Object> map = new HashMap<>();
                 map.putAll(jwt.getBody());
 
                 Session session = (Session) req.getObject(Session.class);
@@ -90,7 +88,17 @@ public class JwtAopFactory implements AopFactory {
                     String sessionId = jwt.getBody().getId();
                     SessionProvider sessionProvider = req.get(SessionProvider.class);
                     if (sessionProvider != null) {
-                        sessionProvider.load(sessionId);
+                        session = sessionProvider.load(req,sessionId);
+                        if (session == null) {
+                            session = sessionProvider.newSession(sessionId);
+                            session.putAll(map);
+                        }else {
+                            for (Map.Entry<String,Object> entry : map.entrySet()) {
+                                if (!session.has(entry.getKey())) {
+                                    session.set(entry.getKey(), entry.getValue());
+                                }
+                            }
+                        }
                     }
                 }
                 req.setObject("jwt", map);

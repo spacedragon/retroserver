@@ -42,4 +42,15 @@ public class JwtProvider {
                 .compact();
     }
 
+    public String setJwt(String data) {
+        JwtBuilder jwtBuilder = Jwts.builder()
+                .setPayload(data);
+        long expireMills = options.jwtExpiration().toMillis();
+        if (expireMills > 0)
+            jwtBuilder.setExpiration(new Date(System.currentTimeMillis() + expireMills));
+        jwtBuilder.setId(req.session().id());
+        return jwtBuilder.signWith(SignatureAlgorithm.HS512, options.jwtSecret())
+                .compact();
+    }
+
 }

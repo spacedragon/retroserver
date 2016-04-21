@@ -112,7 +112,7 @@ public class HttpServerHandler extends SimpleChannelInboundHandler<Object> {
                 }
             } else if (contentBuffer != null) {
                 ByteBuf content = httpContent.content();
-                contentBuffer.addComponent(content);
+                contentBuffer.addComponent(content.retain());
                 contentBuffer.writerIndex(contentBuffer.writerIndex() + content.readableBytes());
             }
             // readHttpDataChunkByChunk();

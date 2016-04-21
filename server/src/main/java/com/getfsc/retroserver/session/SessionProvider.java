@@ -30,8 +30,7 @@ public abstract class SessionProvider {
                     for (Cookie cookie : cookies) {
                         if (cookie.name().equals(JSESSIONID)) {
                             String value = cookie.value();
-                            session = load(value);
-                            request.setObject(Session.class, session);
+                            session = load(request, value);
                         }
                     }
                 }
@@ -48,7 +47,8 @@ public abstract class SessionProvider {
     public abstract Session newSession();
 
 
-    public abstract Session load(String value);
+    public abstract Session load(ServerRequest req, String value);
 
 
+    public abstract Session newSession(String sessionId) ;
 }

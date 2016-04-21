@@ -14,10 +14,10 @@ import java.util.List;
  */
 public class LoginProvider {
 
-    private static final String USER_ROLES = "userRoles";
+    public static final String USER_ROLES = "userRoles";
 
 
-    private static final String LOGIN_USER = "loginUser";
+    public static final String LOGIN_USER = "loginUser";
     private ServerRequest req;
 
     public LoginProvider(ServerRequest req) {

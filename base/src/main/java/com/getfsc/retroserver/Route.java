@@ -4,10 +4,7 @@ import com.getfsc.retroserver.aop.AopFactory;
 import com.getfsc.retroserver.aop.AopFactoryHub;
 import com.getfsc.retroserver.http.RequestCaller;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by IntelliJ IDEA.
@@ -87,7 +84,7 @@ public class Route {
     private List<AopFactory> aopFactories = new ArrayList<>();
 
 
-    HashMap<String, Object[]> aops = new HashMap<>();
+    private LinkedHashMap<String, Object[]> aops = new LinkedHashMap<>();
 
     public void addAop(String name, Object... params) {
         aops.put(name, params);
