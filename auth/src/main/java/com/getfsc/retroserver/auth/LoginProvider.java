@@ -1,5 +1,6 @@
 package com.getfsc.retroserver.auth;
 
+import com.getfsc.retroserver.ObjectConvert;
 import com.getfsc.retroserver.http.ServerRequest;
 
 import java.util.Arrays;
@@ -24,8 +25,8 @@ public class LoginProvider {
         this.req = req;
     }
 
-    public void login(Object loggedUser){
-        req.session().set(LOGIN_USER,loggedUser);
+    public void login(Object loggedUser) {
+        req.session().set(LOGIN_USER, loggedUser);
     }
 
 
@@ -33,8 +34,8 @@ public class LoginProvider {
         req.session().remove(LOGIN_USER);
     }
 
-    public <T> T getUser() {
-        return req.session().get(LOGIN_USER);
+    public <T> T getUser(Class<T> clazz) {
+        return ObjectConvert.convert(req.session().get(LOGIN_USER), clazz);
     }
 
     public List<String> userRoles(ServerRequest req) {

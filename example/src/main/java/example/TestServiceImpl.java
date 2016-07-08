@@ -12,6 +12,7 @@ import retrofit2.http.Path;
 import javax.inject.Inject;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by IntelliJ IDEA.
@@ -32,7 +33,7 @@ public class TestServiceImpl extends RetroController implements TestService {
     @JWT
     @Check("admin")
     @ContentType(ContentType.JSON)
-    public Call<List<Repo>> listRepos(@Path("user") String user) {
+    public Call<List<Repo>> listRepos(@Path("user") String user,Map<String,Object> data) {
         List<Repo> result = Arrays.asList(new Repo(user));
 
         return ok(result);

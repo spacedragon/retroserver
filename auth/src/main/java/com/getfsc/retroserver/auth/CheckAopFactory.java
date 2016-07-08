@@ -6,6 +6,7 @@ import com.getfsc.retroserver.http.ServerRequest;
 import io.netty.handler.codec.http.HttpResponseStatus;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by IntelliJ IDEA.
@@ -32,7 +33,7 @@ class CheckAopFactory implements AopFactory {
             public boolean beforeInvoke(ServerRequest request) {
 
                 LoginProvider loginProvider = request.get(LoginProvider.class);
-                Object object = loginProvider.getUser();
+                Map object = loginProvider.getUser(Map.class);
                 if (object == null) {
                     status = HttpResponseStatus.UNAUTHORIZED;
                     message = "requires login.";
@@ -61,7 +62,8 @@ class CheckAopFactory implements AopFactory {
 
     @Override
     public AopFactory setFactoryParams(Object[] params) {
-        checkRoles = (String[]) params;
-        return this;
+        CheckAopFactory ret = new CheckAopFactory();
+        ret.checkRoles = (String[]) params;
+        return ret;
     }
 }

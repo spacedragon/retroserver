@@ -20,4 +20,5 @@ public interface AopFactory {
     default Integer priority() {
         return 9999;
     };
+
 }

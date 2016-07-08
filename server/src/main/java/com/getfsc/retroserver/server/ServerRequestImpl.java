@@ -138,7 +138,26 @@ public class ServerRequestImpl implements ServerRequest {
 
     @Override
     public <T> T body(Class<T> clz) {
-        return ObjectConvert.fromJson(bodyBuf.toString(Charset.forName("utf8")), clz);
+        String contentType = request.headers().getAsString(HttpHeaderNames.CONTENT_TYPE.toString());
+        MediaType mediaType = contentType == null ? null : MediaType.parse(contentType);
+        String tt;
+        Charset charset;
+        if (mediaType == null) {
+            tt = "json";
+            charset = CharsetUtil.UTF_8;
+        } else {
+            tt = mediaType.type();
+            charset = mediaType.charset() ==null ? CharsetUtil.UTF_8 : mediaType.charset();
+        }
+        String body = bodyBuf.toString(charset);
+        switch (tt) {
+            case "text":
+                return ObjectConvert.convert(body, clz);
+            case "application":
+            case "json":
+            default:
+                return ObjectConvert.fromJson(body, clz);
+        }
     }
 
     @Override

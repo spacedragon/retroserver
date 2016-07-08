@@ -98,7 +98,7 @@ public class ControllerGenerator {
             return ElementFilter.methodsIn(elem.getEnclosedElements()).stream();
         });
 
-        List<Endpoint> endpoints = m.map(this::getVerbAndUrl).filter(e -> e != null).collect(Collectors.toList());
+        List<Endpoint> endpointInterfaces = m.map(this::getVerbAndUrl).filter(e -> e != null).collect(Collectors.toList());
 
         TypeMirror current = controllerElem.asType();
         while (current.getKind() != TypeKind.NONE) {
@@ -107,8 +107,8 @@ public class ControllerGenerator {
                     .stream()
                     .filter(method -> method.getModifiers().contains(Modifier.PUBLIC))
                     .forEach(method ->
-                            endpoints.forEach(ed -> {
-                                if (processingEnv.getElementUtils().overrides(method, ed.element, e)) {
+                            endpointInterfaces.forEach(endPointInterface -> {
+                                if (processingEnv.getElementUtils().overrides(method, endPointInterface.element, e)) {
 
 
                                     MethodSpec.Builder beforeRoute = MethodSpec.methodBuilder(method.getSimpleName().toString() + "Route")
@@ -127,7 +127,7 @@ public class ControllerGenerator {
                                     handleServerAnnotation(method, beforeRoute, call);
 
 
-                                    String vars = method.getParameters().stream().map(ve -> addParam(call, ve))
+                                    String vars = endPointInterface.element.getParameters().stream().map(ve -> addParam(call, ve))
                                             .collect(Collectors.joining(", "));
 
                                     call.addStatement("return controller.$L($L)", method.getSimpleName().toString(), vars);
@@ -138,10 +138,10 @@ public class ControllerGenerator {
                                             .addMethod(call.build());
 
                                     MethodSpec methodSpec = beforeRoute
-                                            .addStatement("route.setVerb($S)", ed.verb)
+                                            .addStatement("route.setVerb($S)", endPointInterface.verb)
                                             .addStatement("route.setBaseUrl($S)", baseUrl)
-                                            .addStatement("route.setUrl($S)", ed.url)
-                                            .addStatement("route.setBodyType($T.$L)", BodyType.class, ed.bodyType)
+                                            .addStatement("route.setUrl($S)", endPointInterface.url)
+                                            .addStatement("route.setBodyType($T.$L)", BodyType.class, endPointInterface.bodyType)
                                             .addStatement("route.setCaller($L)", caller.build())
                                             .addStatement("return route")
                                             .build();
@@ -195,29 +195,35 @@ public class ControllerGenerator {
     private String addParam(MethodSpec.Builder call, VariableElement ve) {
         TypeName varType = TypeName.get(ve.asType());
         Path path = ve.getAnnotation(Path.class);
+        TypeName rawType;
+        if (varType instanceof ParameterizedTypeName) {
+            rawType = ((ParameterizedTypeName) varType).rawType;
+        }else {
+            rawType = varType;
+        }
         String varname = ve.getSimpleName().toString();
         if (path != null) {
             call.addStatement("$T $L = request.path($S).get($T.class)",
-                    varType, varname, path.value(), varType);
+                    varType, varname, path.value(), rawType);
             return varname;
         }
         Query query = ve.getAnnotation(Query.class);
         if (query != null) {
             call.addStatement("$T $L = request.query($S).get($T.class)",
-                    varType, varname, query.value(), varType);
+                    varType, varname, query.value(), rawType);
             return varname;
         }
         Field field = ve.getAnnotation(Field.class);
         if (field != null) {
             call.addStatement("$T $L = request.field($S).get($T.class)",
-                    varType, varname, field.value(), varType);
+                    varType, varname, field.value(), rawType);
             return varname;
         }
 
         Header header = ve.getAnnotation(Header.class);
         if (header != null) {
             call.addStatement("$T $L = request.header($S).get($T.class)",
-                    varType, varname, header.value(), varType);
+                    varType, varname, header.value(), rawType);
             return varname;
         }
 
@@ -230,7 +236,8 @@ public class ControllerGenerator {
 
         Body body = ve.getAnnotation(Body.class);
         if (body != null) {
-            call.addStatement("$T $L= request.body($T.class)", varType, varname, varType);
+
+            call.addStatement("$T $L= request.body($T.class)", varType, varname, rawType);
             return varname;
         }
 
@@ -242,7 +249,7 @@ public class ControllerGenerator {
         }
 
         //don't know how to set this value, may be it's body
-        call.addStatement("$T $L= request.body($T.class)", varType, varname, varType);
+        call.addStatement("$T $L= request.body($T.class)", varType, varname, rawType);
 
         return varname;
     }
