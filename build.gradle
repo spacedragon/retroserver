@@ -1,0 +1,44 @@
+apply plugin: 'scala'
+apply plugin: 'maven'
+
+group = 'io.raidrally'
+version = '1.0-SNAPSHOT'
+
+description = """"""
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+sourceSets {
+    main {
+        scala {
+            srcDirs = ['src/main/scala', 'src/main/java']
+        }
+        java {
+            srcDirs = []
+        }
+    }
+}
+
+
+tasks.withType(ScalaCompile) {
+    scalaCompileOptions.useAnt = false
+}
+
+repositories {
+        
+     maven { url "http://repo.maven.apache.org/maven2" }
+}
+dependencies {
+    compile group: 'org.scala-lang', name: 'scala-library', version:'2.11.6'
+    compile group: 'org.scala-lang', name: 'scala-reflect', version:'2.11.6'
+    compile group: 'mysql', name: 'mysql-connector-java', version:'5.1.30'
+    compile group: 'commons-dbcp', name: 'commons-dbcp', version:'1.4'
+    compile group: 'com.google.guava', name: 'guava', version:'18.0'
+    compile group: 'org.apache.logging.log4j', name: 'log4j-api', version:'2.4.1'
+    compile group: 'org.apache.logging.log4j', name: 'log4j-core', version:'2.4.1'
+    compile group: 'org.apache.logging.log4j', name: 'log4j-1.2-api', version:'2.4.1'
+    compile group: 'io.jsonwebtoken', name: 'jjwt', version:'0.6.0'
+    compile group: 'com.alibaba', name: 'fastjson', version:'1.2.7'
+    compile group: 'io.netty', name: 'netty-all', version:'5.0.0.Alpha2'
+}
