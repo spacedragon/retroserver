@@ -39,7 +39,6 @@ public class NettyServer {
         this.hub = hub;
     }
 
-
     private Set<Route> routes;
     private AopFactoryHub hub;
 
@@ -108,6 +107,15 @@ public class NettyServer {
 
 
     public void waitForShutdown() throws InterruptedException {
+        try {
+            ch.closeFuture().sync();
+        } finally {
+            bossGroup.shutdownGracefully();
+            workerGroup.shutdownGracefully();
+        }
+    }
+
+    public void waitForShutdown1() throws InterruptedException {
         try {
             ch.closeFuture().sync();
         } finally {
