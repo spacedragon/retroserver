@@ -7,6 +7,7 @@ import com.rabbitmq.client.{Channel, ConnectionFactory}
 import com.twitter.finagle.tracing.{Annotation, Trace}
 import com.twitter.scrooge.{ThriftStruct, ThriftStructCodec, ThriftStructSerializer}
 import com.twitter.finagle.http.HttpTracing.Header
+import com.twitter.finagle.stats.{Counter, ServerStatsReceiver, StatsReceiver}
 
 
 abstract class EventSender(
@@ -42,7 +43,13 @@ abstract class EventSender(
     }
   }
 
-  def send(event: MQEvent): Unit = sendWithTracer(event)
+  val statsReceiver: StatsReceiver = ServerStatsReceiver.scope(getClass.getSimpleName)
+  val eventsCounter: Counter = statsReceiver.counter("events")
+
+  def send(event: MQEvent): Unit = {
+    eventsCounter.incr()
+    sendWithTracer(event)
+  }
 
   def getMqTraceHeaders(): Map[String, AnyRef] =
     Trace.idOption match {
@@ -56,7 +63,7 @@ abstract class EventSender(
     }
 
   private def sendWithTracer(event: MQEvent): Unit = {
-    this.getChannel().exchangeDeclare(EXCHANGE_NAME, EXCHANGE_TYPE, EXCHANGE_DURABLE)
+    this.getChannel().exchangeDeclare(getExchangeName(RABBIT_MQ_NAMESPACE), EXCHANGE_TYPE, EXCHANGE_DURABLE)
 
     val eventWithHostName = event.copy(sender = Some(event.sender.getOrElse(hostname)))
     val messageBytes = mqEventSerializer.toBytes(eventWithHostName)
@@ -76,7 +83,7 @@ abstract class EventSender(
 
     Trace.record(Annotation.ClientSend())
     Trace.time(s"$EVENT_TRACING_PREFIX ${event.requestType} Sent") {
-      this.getChannel().basicPublish(EXCHANGE_NAME, bindingKey, props, messageBytes)
+      this.getChannel().basicPublish(getExchangeName(RABBIT_MQ_NAMESPACE), bindingKey, props, messageBytes)
     }
   }
 }
